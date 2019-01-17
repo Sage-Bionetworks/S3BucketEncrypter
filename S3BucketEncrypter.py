@@ -60,7 +60,7 @@ def encryptBucket(awsKeyId, awsKeySecret, awsSessionToken, bucket, maxKeysPerBat
         if continuationToken is None:
             break
 
-    print("Processed "+str(counter)+" files ("+unencrypted+" unencrypted files were found), ending with "+key+".")
+    print("Processed "+str(counter)+" files ("+str(unencrypted)+" unencrypted files were found), ending with "+key+".")
     return key
 
 if __name__ == '__main__':
