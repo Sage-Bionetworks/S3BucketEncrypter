@@ -17,9 +17,14 @@ def s3Encrypt(bucketName, key, s3Client):
     s3Client.put_object_acl(Bucket=bucketName, Key=key, AccessControlPolicy=acl)
     
 def encryptBucket(awsKeyId, awsKeySecret, awsSessionToken, bucket, maxKeysPerBatch, startAfter, maxNumberToProcess, dryrun):
-    s3Client= boto3.client('s3', aws_access_key_id=awsKeyId, aws_secret_access_key=awsKeySecret, aws_session_token=awsSessionToken)
+    if awsKeyId is None and awsKeySecret is None:
+        # This is the case in which the script is running on an EC2 having a role.  See "IAM Role" here: https://boto3.amazonaws.com/v1/documentation/api/latest/guide/configuration.html
+        s3Client= boto3.client('s3')
+    else:  
+        s3Client= boto3.client('s3', aws_access_key_id=awsKeyId, aws_secret_access_key=awsKeySecret, aws_session_token=awsSessionToken)
     
     counter=0
+    unencrypted=0
     continuationToken=None
     while True:
         if continuationToken is None:
@@ -42,6 +47,8 @@ def encryptBucket(awsKeyId, awsKeySecret, awsSessionToken, bucket, maxKeysPerBat
                 if sse == 'AES256':
                     print(key+'\tServerSideEncryption: '+sse+"\tNo encryption necessary")
                 else:
+                    unencrypted=unencrypted+1
+                else:
                     if not dryrun:
                         s3Encrypt(bucket, key, s3Client)
                     print(key+'\t encrypted using ServerSideEncryption')
@@ -54,14 +61,14 @@ def encryptBucket(awsKeyId, awsKeySecret, awsSessionToken, bucket, maxKeysPerBat
         if continuationToken is None:
             break
 
-    print("Processed "+str(counter)+" files, ending with "+key+".")
+    print("Processed "+str(counter)+" files ("+unencrypted+" unencrypted files were found), ending with "+key+".")
     return key
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument("-b", "--bucket", required=True, help="bucket name")
-    parser.add_argument("-kid", "--awsKeyId", required=True, help="AWS Key ID")
-    parser.add_argument("-ksec", "--awsKeySecret", required=True, help="AWS Key Secret")
+    parser.add_argument("-kid", "--awsKeyId", required=False, help="AWS Key ID")
+    parser.add_argument("-ksec", "--awsKeySecret", required=False, help="AWS Key Secret")
     parser.add_argument("-awstoken", "--awsSessionToken", required=False, help="AWS MFA Session Token")
     parser.add_argument("-m", "--maxNumberToProcess", type=int, help="Maximum number of files to process", required=False)
     parser.add_argument("-d", "--dryrun", action='store_true', help="dry run")
