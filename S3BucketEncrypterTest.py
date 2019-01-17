@@ -3,7 +3,7 @@ Tests S3BucketEncrypter
 
 To run
 
-python S3BucketEncrypterTest.py -b plfm5082-upstream.sagebase.org \
+python S3BucketEncrypterTest.py -b <bucketName> \
 -skid xxx -sksec xxxx -sawstoken xxxxx \
 -ekid xxx -eksec xxxx -eawstoken xxxxx
 
@@ -54,8 +54,11 @@ if __name__ == '__main__':
         
     # run S3BucketEncrypter on bucket
     # Note: user encrypting the files is other than the user who created them
-    encryptBucket(args.encrypt_awsKeyId, args.encrypt_awsKeySecret, args.encrypt_awsSessionToken, args.bucket, 5, startAfter=None, maxNumberToProcess=args.maxNumberToProcess, dryrun=args.dryrun)
+    lastKey = encryptBucket(args.encrypt_awsKeyId, args.encrypt_awsKeySecret, args.encrypt_awsSessionToken, args.bucket, 5, startAfter=None, maxNumberToProcess=10, dryrun=args.dryrun)
     
+    print("Now process the rest, starting after "+lastKey)
+    lastKey = encryptBucket(args.encrypt_awsKeyId, args.encrypt_awsKeySecret, args.encrypt_awsSessionToken, args.bucket, 5, startAfter=lastKey, maxNumberToProcess=args.maxNumberToProcess, dryrun=args.dryrun)
+
     for key in keysToDelete:
         print("Checking "+key)
         obj = s3Client.get_object(Bucket=args.bucket, Key=key)

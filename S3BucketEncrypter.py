@@ -36,7 +36,6 @@ def encryptBucket(awsKeyId, awsKeySecret, awsSessionToken, bucket, maxKeysPerBat
         i = 0
         while i<len(contents) and (maxNumberToProcess is None or counter<maxNumberToProcess):
             key = contents[i]['Key']
-            firstKey=key
             try:
                 objectMeta = s3Client.head_object(Bucket=bucket, Key=key)
                 sse = objectMeta.get('ServerSideEncryption')
@@ -55,7 +54,8 @@ def encryptBucket(awsKeyId, awsKeySecret, awsSessionToken, bucket, maxKeysPerBat
         if continuationToken is None:
             break
 
-    print("Processed "+str(counter)+" files.")
+    print("Processed "+str(counter)+" files, ending with "+key+".")
+    return key
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
