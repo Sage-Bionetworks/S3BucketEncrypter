@@ -47,11 +47,10 @@ def encryptBucket(awsKeyId, awsKeySecret, awsSessionToken, bucket, maxKeysPerBat
                 if sse == 'AES256':
                     print(key+'\tServerSideEncryption: '+sse+"\tNo encryption necessary")
                 else:
-                    unencrypted=unencrypted+1
-                else:
                     if not dryrun:
                         s3Encrypt(bucket, key, s3Client)
                     print(key+'\t encrypted using ServerSideEncryption')
+                    unencrypted=unencrypted+1
             except Exception as e:
                 print(key+'\t'+str(e))
             i = i + 1
