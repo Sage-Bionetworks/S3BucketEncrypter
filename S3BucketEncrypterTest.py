@@ -15,12 +15,31 @@ import os
 import argparse
 import boto3
 import random, string
-from S3BucketEncrypter import encryptBucket
+from S3BucketEncrypter import encryptBucket, encryptOneFile
 
 
 def randomword(length):
    letters = string.ascii_lowercase
    return ''.join(random.choice(letters) for i in range(length))
+
+
+def createFile(name, bucket, s3Client):
+        body = bytearray(randomword(1000), 'utf-8')
+        metadata={"meta-name":"meta-"+name}
+        s3Client.put_object(Bucket=bucket, Body=body, Key=name, ACL='public-read-write', Metadata=metadata)
+
+def checkFile(bucket, key, expectedAcl, s3Client):
+    print("Checking "+key)
+    obj = s3Client.get_object(Bucket=bucket, Key=key)
+    # verify file is encrypted
+    assert obj.get('ServerSideEncryption')=='AES256', key+" is not encrypted"
+    # verify that metadata is preserved
+    expectedMeta={"meta-name":"meta-"+key}
+    assert obj.get('Metadata')==expectedMeta, "Unxpected metadata: "+obj.get('Metadata')
+    # verify that permissions and ownership are preserved
+    currentAcl = s3Client.get_object_acl(Bucket=bucket, Key=key)
+    assert currentAcl['Owner']==expectedAcl['Owner'], "Owner has changed from\n"+json.dumps(expectedAcl['Owner'])+"\nto\n"+json.dumps(currentAcl['Owner'])
+    assert currentAcl['Grants']==expectedAcl['Grants'], "Grants have changed from\n"+json.dumps(expectedAcl['Grants'])+"\nto\n"+json.dumps(currentAcl['Grants'])
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -46,9 +65,7 @@ if __name__ == '__main__':
     acls = {}
     for i in range(20):
         name = 'file_'+str(i)+'.txt'
-        body = bytearray(randomword(1000), 'utf-8')
-        metadata={"meta-name":"meta-"+name}
-        s3Client.put_object(Bucket=args.bucket, Body=body, Key=name, ACL='public-read-write', Metadata=metadata)
+        createFile(name, args.bucket, s3Client)
         keysToDelete.append(name)
         acls[name]=s3Client.get_object_acl(Bucket=args.bucket, Key=name)
         
@@ -60,22 +77,21 @@ if __name__ == '__main__':
     lastKey = encryptBucket(args.encrypt_awsKeyId, args.encrypt_awsKeySecret, args.encrypt_awsSessionToken, args.bucket, 5, startAfter=lastKey, maxNumberToProcess=args.maxNumberToProcess, dryrun=args.dryrun)
 
     for key in keysToDelete:
-        print("Checking "+key)
-        obj = s3Client.get_object(Bucket=args.bucket, Key=key)
-        # verify file is encrypted
-        assert obj.get('ServerSideEncryption')=='AES256', key+" is not encrypted"
-        # verify that metadata is preserved
-        expectedMeta={"meta-name":"meta-"+key}
-        assert obj.get('Metadata')==expectedMeta, "Unxpected metadata: "+obj.get('Metadata')
-        # verify that permissions and ownership are preserved
-        currentAcl = s3Client.get_object_acl(Bucket=args.bucket, Key=key)
-        assert currentAcl['Owner']==acls[key]['Owner'], "Owner has changed from\n"+json.dumps(acls[key]['Owner'])+"\nto\n"+json.dumps(currentAcl['Owner'])
-        assert currentAcl['Grants']==acls[key]['Grants'], "Grants have changed from\n"+json.dumps(acls[key]['Grants'])+"\nto\n"+json.dumps(currentAcl['Grants'])
+        checkFile(args.bucket, key, acls[key], s3Client)        
         
+    # now set up and encrypt just one file
+    name = 'file_singleton.txt'
+    createFile(name, args.bucket, s3Client)
+    keysToDelete.append(name)
+    acl=s3Client.get_object_acl(Bucket=args.bucket, Key=name)
+    encryptOneFile(args.encrypt_awsKeyId, args.encrypt_awsKeySecret, args.encrypt_awsSessionToken, args.bucket, name, args.dryrun)
+    checkFile(args.bucket, name, acl, s3Client)
+    
     print("All files pass checks.")
     
     # tear down
     for key in keysToDelete:
         s3Client.delete_object(Bucket=args.bucket, Key=key)
+        
     print("Clean up is done.")
     
